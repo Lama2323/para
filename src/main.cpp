@@ -241,6 +241,7 @@ int main() {
     printSeparator();
     std::cout << "  DEMO COMPLETE" << std::endl;
     printSeparator();
+    std::cout << "Press any key to exit..." << std::endl;
     std::cin.get();
     return 0;
 }
