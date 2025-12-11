@@ -37,11 +37,22 @@ BenchmarkResult runSequentialBenchmark() {
     allInputs.reserve(NUM_CLIENTS * INPUTS_PER_CLIENT);
     
     // Generate batches until finished
-    for (int i = 0; i < NUM_CLIENTS; ++i) {
-        Client* client = clientManager.getClient(i);
-        while (!client->isFinished()) {
-            auto batch = client->generateBatch(1000);
-            allInputs.insert(allInputs.end(), batch.begin(), batch.end());
+    // Generate batches in round-robin fashion to simulate interleaved arrival 
+    // This provides a fairer comparison by ordering inputs roughly by time
+    bool anyActive = true;
+    while (anyActive) {
+        anyActive = false;
+        for (int i = 0; i < NUM_CLIENTS; ++i) {
+            Client* client = clientManager.getClient(i);
+            if (!client->isFinished()) {
+                // Use smaller batch size (same as parallel) to interleave inputs finely
+                auto batch = client->generateBatch(50);
+                allInputs.insert(allInputs.end(), batch.begin(), batch.end());
+                
+                if (!client->isFinished()) {
+                    anyActive = true;
+                }
+            }
         }
     }
     
