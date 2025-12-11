@@ -6,96 +6,91 @@ namespace para {
 GameServer::GameServer(int numMatches) 
     : numMatches_(numMatches)
 {
-    // Create all matches
+    // Create all matches and queues
     matches_.reserve(numMatches);
+    matchQueues_.reserve(numMatches);
     for (int i = 0; i < numMatches; ++i) {
         matches_.push_back(std::make_unique<Match>(i));
+        matchQueues_.push_back(std::make_unique<MatchQueue>());
     }
 }
 
 void GameServer::start() {
-    // Start all matches
     for (auto& match : matches_) {
         match->start();
     }
 }
 
 void GameServer::receiveInput(const Input& input) {
-    std::lock_guard<std::mutex> lock(queueMutex_);
-    inputQueue_.push(input);
+    if (input.matchId >= 0 && input.matchId < numMatches_) {
+        std::lock_guard<std::mutex> lock(matchQueues_[input.matchId]->mutex);
+        matchQueues_[input.matchId]->queue.push(input);
+    }
 }
 
 void GameServer::receiveInputs(const std::vector<Input>& inputs) {
-    std::lock_guard<std::mutex> lock(queueMutex_);
     for (const auto& input : inputs) {
-        inputQueue_.push(input);
+        receiveInput(input);
+    }
+}
+
+void GameServer::processPending(int matchId) {
+    if (matchId < 0 || matchId >= numMatches_) return;
+    
+    std::queue<Input> localQueue;
+    
+    // Extract everything currently in the queue
+    {
+        std::lock_guard<std::mutex> lock(matchQueues_[matchId]->mutex);
+        if (matchQueues_[matchId]->queue.empty()) return;
+        std::swap(localQueue, matchQueues_[matchId]->queue);
+    }
+    
+    Match* match = matches_[matchId].get();
+    
+    // Process without holding the lock
+    while (!localQueue.empty()) {
+        const Input& input = localQueue.front();
+        match->processInput(input);
+        localQueue.pop();
+        processedCount_.fetch_add(1, std::memory_order_relaxed);
     }
 }
 
 void GameServer::processAllSequential() {
-    // Process all inputs in a single thread
-    while (true) {
-        Input input;
-        
-        // Get next input from queue
-        {
-            std::lock_guard<std::mutex> lock(queueMutex_);
-            if (inputQueue_.empty()) break;
-            input = inputQueue_.front();
-            inputQueue_.pop();
+    bool hasWork = true;
+    while (hasWork) {
+        hasWork = false;
+        for (int i = 0; i < numMatches_; ++i) {
+            {
+                std::lock_guard<std::mutex> lock(matchQueues_[i]->mutex);
+                if (!matchQueues_[i]->queue.empty()) {
+                    hasWork = true;
+                }
+            }
+            if (hasWork) {
+                processPending(i);
+            }
         }
-        
-        // Route to correct match
-        processSingleInput(input);
     }
 }
 
 void GameServer::processAllParallel(ThreadPool& pool) {
-    // Distribute inputs to thread pool
-    // Each match's inputs are grouped together for better locality
-    
-    std::vector<std::vector<Input>> inputsByMatch(numMatches_);
-    
-    // Group inputs by match
-    {
-        std::lock_guard<std::mutex> lock(queueMutex_);
-        while (!inputQueue_.empty()) {
-            Input input = inputQueue_.front();
-            inputQueue_.pop();
-            
-            if (input.matchId >= 0 && input.matchId < numMatches_) {
-                inputsByMatch[input.matchId].push_back(input);
-            }
-        }
-    }
-    
-    // Submit processing tasks for each match
-    for (int matchId = 0; matchId < numMatches_; ++matchId) {
-        if (inputsByMatch[matchId].empty()) continue;
-        
-        // Capture by value to avoid data races
-        std::vector<Input> inputs = std::move(inputsByMatch[matchId]);
-        Match* match = matches_[matchId].get();
-        
-        pool.submit([this, match, inputs = std::move(inputs)]() {
-            for (const auto& input : inputs) {
-                match->processInput(input);
-                processedCount_.fetch_add(1, std::memory_order_relaxed);
-            }
+    // Just submit a task for each match to process its queue
+    for (int i = 0; i < numMatches_; ++i) {
+        pool.submit([this, i]() {
+            processPending(i);
         });
     }
-    
-    // Wait for all tasks to complete
     pool.waitAll();
 }
 
 void GameServer::processSingleInput(const Input& input) {
-    if (input.matchId < 0 || input.matchId >= numMatches_) {
-        return;
+    // Legacy helper - mostly redundant now but keeping for interface compatibility if needed internally
+    if (input.matchId >= 0 && input.matchId < numMatches_) {
+        matches_[input.matchId]->processInput(input);
+        processedCount_.fetch_add(1, std::memory_order_relaxed);
     }
-    
-    matches_[input.matchId]->processInput(input);
-    processedCount_.fetch_add(1, std::memory_order_relaxed);
 }
 
 size_t GameServer::getProcessedCount() const {
@@ -111,13 +106,16 @@ int GameServer::getTotalRollbackCount() const {
 }
 
 size_t GameServer::getPendingCount() const {
-    std::lock_guard<std::mutex> lock(queueMutex_);
-    return inputQueue_.size();
+    size_t total = 0;
+    for (const auto& mq : matchQueues_) {
+        std::lock_guard<std::mutex> lock(mq->mutex);
+        total += mq->queue.size();
+    }
+    return total;
 }
 
 bool GameServer::isAllProcessed() const {
-    std::lock_guard<std::mutex> lock(queueMutex_);
-    return inputQueue_.empty();
+    return getPendingCount() == 0;
 }
 
 int GameServer::getNumMatches() const {
@@ -125,9 +123,10 @@ int GameServer::getNumMatches() const {
 }
 
 void GameServer::clearInputs() {
-    std::lock_guard<std::mutex> lock(queueMutex_);
-    while (!inputQueue_.empty()) {
-        inputQueue_.pop();
+    for (const auto& mq : matchQueues_) {
+        std::lock_guard<std::mutex> lock(mq->mutex);
+        std::queue<Input> empty;
+        std::swap(mq->queue, empty);
     }
     processedCount_.store(0, std::memory_order_relaxed);
 }

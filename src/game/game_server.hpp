@@ -23,74 +23,46 @@ public:
     explicit GameServer(int numMatches = NUM_MATCHES);
     ~GameServer() = default;
     
-    // Non-copyable
     GameServer(const GameServer&) = delete;
     GameServer& operator=(const GameServer&) = delete;
     
-    /**
-     * Initialize and start all matches
-     */
     void start();
     
-    /**
-     * Receive input and add to queue (thread-safe)
-     */
+    // Receive input and dispatch to correct match queue
     void receiveInput(const Input& input);
     
-    /**
-     * Receive multiple inputs at once
-     */
+    // Receive multiple inputs
     void receiveInputs(const std::vector<Input>& inputs);
     
-    /**
-     * Process all inputs SEQUENTIALLY (single-threaded)
-     */
+    // Process pending inputs for a specific match
+    void processPending(int matchId);
+    
+    // Legacy support: Process all inputs SEQUENTIALLY
     void processAllSequential();
     
-    /**
-     * Process all inputs in PARALLEL (using thread pool)
-     */
+    // Legacy support: Process all inputs in PARALLEL
     void processAllParallel(ThreadPool& pool);
     
-    /**
-     * Process single input - route to correct match
-     */
     void processSingleInput(const Input& input);
     
-    /**
-     * Get total number of processed inputs
-     */
     size_t getProcessedCount() const;
-    
-    /**
-     * Get total rollback count across all matches
-     */
     int getTotalRollbackCount() const;
     
-    /**
-     * Get pending input count
-     */
+    // Get total pending count across all queues
     size_t getPendingCount() const;
     
-    /**
-     * Check if all inputs processed
-     */
     bool isAllProcessed() const;
-    
-    /**
-     * Get number of matches
-     */
     int getNumMatches() const;
-    
-    /**
-     * Clear input queue (for reuse)
-     */
     void clearInputs();
 
 private:
+    struct MatchQueue {
+        std::queue<Input> queue;
+        std::mutex mutex;
+    };
+
     std::vector<std::unique_ptr<Match>> matches_;
-    std::queue<Input> inputQueue_;
-    mutable std::mutex queueMutex_;
+    std::vector<std::unique_ptr<MatchQueue>> matchQueues_;
     
     std::atomic<size_t> processedCount_{0};
     int numMatches_;

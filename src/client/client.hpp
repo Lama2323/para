@@ -18,33 +18,23 @@ public:
     Client(int clientId, int matchId, int playerId, int numInputs = INPUTS_PER_CLIENT);
     
     /**
-     * Generate all random inputs
+     * Generate inputs for the next batch of ticks
+     * Returns a vector of generated inputs
      */
-    void generateInputs();
+    std::vector<Input> generateBatch(int batchSize);
     
     /**
-     * Get all generated inputs
+     * Check if client has finished generating all inputs
      */
-    const std::vector<Input>& getInputs() const;
+    bool isFinished() const;
     
-    /**
-     * Get client ID
-     */
+    // Legacy support (optional, can remove if we fully switch)
+    // void generateInputs();
+    // const std::vector<Input>& getInputs() const;
+    
     int getClientId() const;
-    
-    /**
-     * Get match ID this client belongs to
-     */
     int getMatchId() const;
-    
-    /**
-     * Get player ID (0 or 1)
-     */
     int getPlayerId() const;
-    
-    /**
-     * Get number of inputs
-     */
     size_t getNumInputs() const;
 
 private:
@@ -52,8 +42,9 @@ private:
     int matchId_;
     int playerId_;
     int numInputs_;
+    int currentTick_; // Track current generation progress
     
-    std::vector<Input> inputs_;
+    // std::vector<Input> inputs_; // Removed to save memory in streaming mode
     std::mt19937 rng_;
 };
 
@@ -65,24 +56,13 @@ public:
     ClientManager(int numClients = NUM_CLIENTS, int numMatches = NUM_MATCHES, 
                   int inputsPerClient = INPUTS_PER_CLIENT);
     
-    /**
-     * Generate all inputs for all clients
-     */
-    void generateAllInputs();
+    // Legacy: Generate all inputs for all clients
+    // void generateAllInputs();
+    // std::vector<Input> getAllInputs() const;
     
-    /**
-     * Get all inputs from all clients
-     */
-    std::vector<Input> getAllInputs() const;
-    
-    /**
-     * Get number of clients
-     */
+    Client* getClient(int index);
+
     int getNumClients() const;
-    
-    /**
-     * Get total number of inputs
-     */
     size_t getTotalInputs() const;
 
 private:
