@@ -27,7 +27,7 @@ constexpr int ROLLBACK_INTERVAL = 5;  // Rollback every 5 ticks
 // ============================================
 constexpr int NUM_MATCHES = 20;
 constexpr int NUM_CLIENTS = 40;
-constexpr int INPUTS_PER_CLIENT = 100000;
+constexpr int INPUTS_PER_CLIENT = 10000;
 constexpr int TOTAL_INPUTS = NUM_CLIENTS * INPUTS_PER_CLIENT;  // 400,000
 
 // ============================================

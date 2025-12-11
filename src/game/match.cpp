@@ -113,25 +113,6 @@ void Match::saveSnapshot() {
     // Keep only last 10 snapshots to limit memory
     if (snapshots_.size() > 10) {
         snapshots_.erase(snapshots_.begin());
-        
-        // Pruning Optimization: Remove inputs older than the oldest snapshot
-        // We never rollback further back than the oldest snapshot, so these inputs are useless
-        if (!snapshots_.empty()) {
-            int oldestTick = snapshots_.front().tickId;
-            
-            // Remove inputs older than oldestTick
-            // Since inputHistory_ is append-only by arrival time, it's NOT strictly sorted by tickId
-            // (due to late inputs), so we must check all or use remove_if.
-            // However, it's roughly sorted, so this linear scan is acceptable if we keep the size small.
-            auto it = std::remove_if(inputHistory_.begin(), inputHistory_.end(), 
-                [oldestTick](const Input& input) {
-                    return input.tickId < oldestTick;
-                });
-            
-            if (it != inputHistory_.end()) {
-                inputHistory_.erase(it, inputHistory_.end());
-            }
-        }
     }
 }
 
