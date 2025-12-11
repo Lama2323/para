@@ -29,8 +29,26 @@ void GameServer::receiveInput(const Input& input) {
 }
 
 void GameServer::receiveInputs(const std::vector<Input>& inputs) {
-    for (const auto& input : inputs) {
-        receiveInput(input);
+    if (inputs.empty()) return;
+
+    size_t i = 0;
+    while (i < inputs.size()) {
+        int currentMatchId = inputs[i].matchId;
+        // Find range of inputs for the same match
+        size_t j = i + 1;
+        while (j < inputs.size() && inputs[j].matchId == currentMatchId) {
+            j++;
+        }
+
+        // Batch push
+        if (currentMatchId >= 0 && currentMatchId < numMatches_) {
+            std::lock_guard<std::mutex> lock(matchQueues_[currentMatchId]->mutex);
+            for (size_t k = i; k < j; ++k) {
+                matchQueues_[currentMatchId]->queue.push(inputs[k]);
+            }
+        }
+        
+        i = j; // Advance
     }
 }
 
