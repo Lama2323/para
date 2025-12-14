@@ -48,7 +48,7 @@ BenchmarkResult runSequentialBenchmark() {
             Client* client = clientManager.getClient(i);
             if (!client->isFinished()) {
                 // Use smaller batch size (same as parallel) to interleave inputs finely
-                auto batch = client->generateBatch(50);
+                auto batch = client->generateBatch(BATCH_SIZE);
                 allInputs.insert(allInputs.end(), batch.begin(), batch.end());
                 
                 if (!client->isFinished()) {

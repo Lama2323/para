@@ -20,12 +20,12 @@ enum class ActionType : uint8_t {
 // ============================================
 constexpr int ARENA_WIDTH = 20;
 constexpr int ARENA_HEIGHT = 20;
-constexpr int ROLLBACK_INTERVAL = 5;
+constexpr int ROLLBACK_INTERVAL = 2;
 
 // ============================================
 // Simulation Constants
 // ============================================
-constexpr int NUM_MATCHES = 20;
+constexpr int NUM_MATCHES = 40;
 constexpr int NUM_CLIENTS = NUM_MATCHES * 2;
 constexpr int INPUTS_PER_CLIENT = 10000;
 constexpr int TOTAL_INPUTS = NUM_CLIENTS * INPUTS_PER_CLIENT;

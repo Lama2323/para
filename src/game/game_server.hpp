@@ -35,7 +35,8 @@ public:
     void receiveInputs(const std::vector<Input>& inputs);
     
     // Process pending inputs for a specific match
-    void processPending(int matchId);
+    // Process pending inputs for a specific match
+    int processPending(int matchId);
     
     // Legacy support: Process all inputs SEQUENTIALLY
     void processAllSequential();

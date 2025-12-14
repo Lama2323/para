@@ -52,27 +52,34 @@ void GameServer::receiveInputs(const std::vector<Input>& inputs) {
     }
 }
 
-void GameServer::processPending(int matchId) {
-    if (matchId < 0 || matchId >= numMatches_) return;
+int GameServer::processPending(int matchId) {
+    if (matchId < 0 || matchId >= numMatches_) return 0;
     
     std::queue<Input> localQueue;
     
     // Extract everything currently in the queue
     {
         std::lock_guard<std::mutex> lock(matchQueues_[matchId]->mutex);
-        if (matchQueues_[matchId]->queue.empty()) return;
+        if (matchQueues_[matchId]->queue.empty()) return 0;
         std::swap(localQueue, matchQueues_[matchId]->queue);
     }
     
     Match* match = matches_[matchId].get();
+    int count = 0;
     
     // Process without holding the lock
     while (!localQueue.empty()) {
         const Input& input = localQueue.front();
         match->processInput(input);
         localQueue.pop();
-        processedCount_.fetch_add(1, std::memory_order_relaxed);
+        count++;
     }
+
+    if (count > 0) {
+        processedCount_.fetch_add(count, std::memory_order_relaxed);
+    }
+
+    return count;
 }
 
 void GameServer::processAllSequential() {

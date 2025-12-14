@@ -4,6 +4,7 @@
 #include "../game/game_server.hpp"
 #include "../scheduler/thread_pool.hpp"
 #include <atomic>
+#include <thread>
 
 namespace para {
 
@@ -24,7 +25,7 @@ struct MatchTask {
 
     void operator()() {
         // Process what's available
-        server->processPending(matchId);
+        int processed = server->processPending(matchId);
         
         // Check termination condition
         bool allClientsDone = clientsFinished->load(std::memory_order_relaxed) == data_num_clients;
@@ -32,6 +33,9 @@ struct MatchTask {
         
         if (!allClientsDone || !queueEmpty) {
             // Keep running
+            if (processed == 0) {
+                std::this_thread::yield();
+            }
             // ThreadPool handles scheduling, so just resubmit.
             pool->submit(*this);
         }

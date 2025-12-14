@@ -5,6 +5,7 @@
 #include "../game/game_server.hpp"
 #include "../scheduler/thread_pool.hpp"
 #include <atomic>
+#include <algorithm>
 
 namespace para {
 
@@ -24,6 +25,10 @@ struct ClientTask {
         auto batch = client->generateBatch(BATCH_SIZE); 
         
         if (!batch.empty()) {
+            // Sort by matchId to minimize lock contention in GameServer
+            std::sort(batch.begin(), batch.end(), [](const Input& a, const Input& b) {
+                return a.matchId < b.matchId;
+            });
             server->receiveInputs(batch);
         }
         
