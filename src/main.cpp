@@ -3,6 +3,8 @@
 #include "scheduler/thread_pool.hpp"
 #include "game/game_server.hpp"
 #include "client/client.hpp"
+#include "tasks/client_task.hpp"
+#include "tasks/match_task.hpp"
 
 #include <iostream>
 #include <chrono>
@@ -95,31 +97,7 @@ BenchmarkResult runConcurrentBenchmark(size_t numThreads) {
     // 1. Submit initial Client Tasks
     for (int i = 0; i < NUM_CLIENTS; ++i) {
         pool.submit([&clientManager, &server, &pool, &clientsFinished, i]() {
-            // Self-replicating Client Task
-            struct ClientTask {
-                Client* client;
-                GameServer* server;
-                ThreadPool* pool;
-                std::atomic<int>* clientsFinished;
-                
-                void operator()() {
-                    // Generate small batch to simulate continuous input
-                    // Batch size small enough to cause frequent task switching but large enough for efficiency
-                    auto batch = client->generateBatch(50); 
-                    
-                    if (!batch.empty()) {
-                        server->receiveInputs(batch);
-                    }
-                    
-                    if (!client->isFinished()) {
-                        // Re-submit self
-                        pool->submit(*this);
-                    } else {
-                        clientsFinished->fetch_add(1, std::memory_order_relaxed);
-                    }
-                }
-            };
-            
+            // Use modular ClientTask
             ClientTask{clientManager.getClient(i), &server, &pool, &clientsFinished}();
         });
     }
@@ -128,31 +106,8 @@ BenchmarkResult runConcurrentBenchmark(size_t numThreads) {
     // These run continuously until all clients are done AND queues are empty
     for (int i = 0; i < NUM_MATCHES; ++i) {
         pool.submit([&server, &pool, &clientsFinished, i]() {
-            // Self-replicating Match Task
-            struct MatchTask {
-                int matchId;
-                GameServer* server;
-                ThreadPool* pool;
-                std::atomic<int>* clientsFinished;
-                
-                void operator()() {
-                    // Process what's available
-                    server->processPending(matchId);
-                    
-                    // Check termination condition
-                    bool allClientsDone = clientsFinished->load(std::memory_order_relaxed) == NUM_CLIENTS;
-                    bool queueEmpty = server->getPendingCount() == 0; // Optimization: Could check specific queue
-                    
-                    if (!allClientsDone || !queueEmpty) {
-                        // Keep running
-                        // Yield to let other tasks run if we didn't find work? 
-                        // ThreadPool handles scheduling, so just resubmit.
-                        pool->submit(*this);
-                    }
-                }
-            };
-            
-            MatchTask{i, &server, &pool, &clientsFinished}();
+            // Use modular MatchTask
+            MatchTask(i, &server, &pool, &clientsFinished, NUM_CLIENTS)();
         });
     }
     
