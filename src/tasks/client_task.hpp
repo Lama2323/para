@@ -21,7 +21,7 @@ struct ClientTask {
     void operator()() {
         // Generate small batch to simulate continuous input
         // Batch size small enough to cause frequent task switching but large enough for efficiency
-        auto batch = client->generateBatch(50); 
+        auto batch = client->generateBatch(BATCH_SIZE); 
         
         if (!batch.empty()) {
             server->receiveInputs(batch);
